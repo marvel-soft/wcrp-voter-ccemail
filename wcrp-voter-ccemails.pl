@@ -33,14 +33,11 @@ my $inputFile = "contact_export-mar08.csv";
 
 
 my $fileName         = "";
-my $emailFile         = "base.csv";
+my $emailFile         = "email.csv";
 my $emailFileh;
-my %baseLine         = ();
+my %emailLine         = ();
 my $printFile        = "print-.txt";
 my $printFileh;
-my $votingFile       = "voting.csv";
-my $votingFileh;
-my %votingLine       = ();
 my $csvHeadings        = "";
 my @csvHeadings;
 my $line1Read       = '';
@@ -48,6 +45,7 @@ my $linesRead       = 0;
 my $linesIncRead    = 0;
 my $printData;
 my $linesWritten    = 0;
+my $linesBlank      = 0;
 
 my $selParty;
 my $skipRecords     = 0;
@@ -67,17 +65,17 @@ my @values2;
 my @date;
 my $voterRank;
 
-my @baseLine;
-my $baseLine;
-my @baseProfile;
-my $baseHeading = "";
-my @baseHeading = (
+my @emailLine;
+my $emailLine;
+my @emailProfile;
+my $emailHeading = "";
+my @emailHeading = (
   "Last",           "First",          
 	"Middle",  
 	"Phone",         	"email",
 	"Address",     
-	"City",           "State",
-	"Zip", 		    		"Contact Points",
+	"City",         
+	"Contact Points",
 );
 
 #
@@ -109,20 +107,21 @@ sub main {
 	# pick out the heading line and hold it and remove end character
 	$csvHeadings = <INPUT>;
 	chomp $csvHeadings;
+	chop $csvHeadings;
 
 	# @csvHeadings will be used to create the files
 	@csvHeadings = split( /\s*,\s*/, $csvHeadings );
 
 	# Build heading for new email record
-	$baseHeading = join( ",", @baseHeading );
-	$baseHeading = $baseHeading . "\n";
+	$emailHeading = join( ",", @emailHeading );
+	$emailHeading = $emailHeading . "\n";
 
 	#
 	# Initialize process loop and open files
 	printLine ("email table file: $emailFile\n");
 	open( $emailFileh, ">$emailFile" )
 	  or die "Unable to open emailFile: $emailFile Reason: $!";
-	print $emailFileh $baseHeading;
+	print $emailFileh $emailHeading;
 
 	# initialize the voter stats array
 	#voterStatsLoad(@voterStatsArray);
@@ -143,46 +142,60 @@ sub main {
 		#
 		# Get the data into an array that matches the headers array
 		chomp $line1Read;
+		chop $line1Read;
 
 		# replace commas from in between double quotes with a space
-		$line1Read =~ s/(?:\G(?!\A)|[^"]*")[^",]*\K(?:,|"(*SKIP)(*FAIL))/ /g;
+		$line1Read =~ s/(?:\G(?!\A)|[^"]*")[^",]*\K(?:,|"(*SKIP)(*FAIL))/;/g;
 
 		# then create the values array
 		@values1 = split( /\s*,\s*/, $line1Read, -1 );
+		# exchange a comma for semicolon
+		#$values1[6] =~ s/;/,/g;
 
 		# Create hash of line for transformation
 		@csvRowHash{@csvHeadings} = @values1;
 
 		#- - - - - - - - - - - - - - - - - - - - - - - - - - 
-		# Assemble database load  for base segment
+		# Assemble database load  for email segment
+		# "Last",       "First",       "Middle",  
+		#	"Phone",      "email",
+		#	"Address",    "City",   		    
+		#	"Contact Points",
 		#- - - - - - - - - - - - - - - - - - - - - - - - - - 
-		%baseLine = ();
+		%emailLine = ();
+    my $firstN;          
+    my $lastN;
     my $UCword                = $csvRowHash{"first"};
 		$UCword  =~ s/(\w+)/\u\L$1/g;
-	  $baseLine{"First"}        = $UCword; 
-    $UCword                = $csvRowHash{"middle"};
+	  $emailLine{"First"}        = $UCword; 
+	  $firstN                    = $UCword; 
+    $UCword                      = $csvRowHash{"middle"};
 		$UCword  =~ s/(\w+)/\u\L$1/g;
-		$baseLine{"Middle"}       = $UCword;;
-    $UCword                = $csvRowHash{"last"};
+		$emailLine{"Middle"}         = $UCword;;
+    $UCword                      = $csvRowHash{"last"};
 		$UCword  =~ s/(\w+)/\u\L$1/g;
-		$baseLine{"Last"}         = $UCword;
+		$emailLine{"Last"}           = $UCword;
+	  $lastN                    = $UCword; 
+		$emailLine{"Phone"}          = $csvRowHash{"phone"};
+		$emailLine{"Address"}        = $csvRowHash{"address"};
+		$UCword                      = $csvRowHash{"city"};
 		$UCword  =~ s/(\w+)/\u\L$1/g;
-		$baseLine{"Phone"}        = $csvRowHash{"phone"};
-		$UCword                   = $csvRowHash{"address"};
-		$UCword  =~ s/(\w+)/\u\L$1/g;
-		$baseLine{"Address 1"}    = $UCword;
-		$UCword                   = $csvRowHash{"city"};
-		$UCword  =~ s/(\w+)/\u\L$1/g;
-		$baseLine{"City"}         = $csvRowHash{"city"};
-		$baseLine{"State"}        = $csvRowHash{"state"};
-		$baseLine{"Zip"}          = $csvRowHash{"zip"};
-
-		
-		@baseProfile = ();
-		foreach (@baseHeading) {
-			push( @baseProfile, $baseLine{$_} );
+		$emailLine{"City"}           = $UCword;
+		$emailLine{"State"}          = $csvRowHash{"state"};
+		$emailLine{"email"}          = $csvRowHash{"email"};
+		my $testEmail                = $csvRowHash{"email"};    
+		$emailLine{"Contact Points"} = $csvRowHash{"contact-points"};
+		if ($testEmail eq "") {
+			printLine("No email address present for $firstN, $lastN \n");
+			$linesBlank = $linesBlank + 1;
+			#ßgoto NEW;
 		}
-		print $emailFileh join( ',', @baseProfile ), "\n";
+
+		@emailProfile = ();
+		foreach (@emailHeading) {
+			push( @emailProfile, $emailLine{$_} );
+		}
+		print $emailFileh join( ',', @emailProfile ), "\n";
 #
 #	here are the political segments.
 #
@@ -206,10 +219,10 @@ main();
 EXIT:
 
 printLine ("<===> Completed transformation of: $inputFile \n");
-printLine ("<===> BASE      SEGMENTS available in file: $emailFile \n");
-printLine ("<===> VOTING    SEGMENTS available in file: $votingFile \n");
+printLine ("<===> EMAIL SEGMENTS available in file: $emailFile \n");
 printLine ("<===> Total Records Read: $linesRead \n");
 printLine ("<===> Total Records written: $linesWritten \n");
+printLine ("<===> Email Records blank: $linesBlank \n");
 
 close(INPUT);
 close($emailFileh);
